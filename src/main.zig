@@ -66,7 +66,7 @@ pub fn Poseidon(comptime prime: u256, comptime T: type) type {
             };
         }
 
-        fn add_round_constants(self: Self, words: []u256, rc_counter: *usize) !void {
+        fn addRoundConstants(self: Self, words: []u256, rc_counter: *usize) !void {
             for (0..self.config.t) |i| {
                 var v = try M.Fe.fromPrimitive(u256, self.m, words[i]);
                 var rc = try M.Fe.fromPrimitive(u256, self.m, self.ROUND_CONSTANTS[rc_counter.*]);
@@ -83,7 +83,7 @@ pub fn Poseidon(comptime prime: u256, comptime T: type) type {
             words[i] = try (try self.m.pow(value, t_f)).toPrimitive(u256);
         }
 
-        fn mix_layer(self: Self, words: []u256) !void {
+        fn mixLayer(self: Self, words: []u256) !void {
             var new_words: [5]u256 = [5]u256{ 0, 0, 0, 0, 0 };
             var matrix = self.MDS_MATRIX;
 
@@ -110,25 +110,25 @@ pub fn Poseidon(comptime prime: u256, comptime T: type) type {
             var state_words = input_words;
 
             for (0..R_f) |_| {
-                try self.add_round_constants(state_words, &round_constants_counter);
+                try self.addRoundConstants(state_words, &round_constants_counter);
                 for (0..self.config.t) |i| {
                     try self.sbox(state_words, i);
                 }
-                try self.mix_layer(state_words);
+                try self.mixLayer(state_words);
             }
 
             for (0..self.config.num_partial_rounds) |_| {
-                try self.add_round_constants(state_words, &round_constants_counter);
+                try self.addRoundConstants(state_words, &round_constants_counter);
                 try self.sbox(state_words, 0);
-                try self.mix_layer(state_words);
+                try self.mixLayer(state_words);
             }
 
             for (0..R_f) |_| {
-                try self.add_round_constants(state_words, &round_constants_counter);
+                try self.addRoundConstants(state_words, &round_constants_counter);
                 for (0..self.config.t) |i| {
                     try self.sbox(state_words, i);
                 }
-                try self.mix_layer(state_words);
+                try self.mixLayer(state_words);
             }
 
             return state_words;
