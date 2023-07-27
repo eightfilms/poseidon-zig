@@ -33,6 +33,7 @@ pub fn Poseidon(comptime T: type, comptime M: type) type {
 
         fn addRoundConstants(self: Self, words: []Fe, rc_counter: *usize) !void {
             for (0..self.config.t) |i| {
+                // TODO: find a nicer way to deal with ROUND_CONSTANTS
                 var rc = try Fe.fromPrimitive(T, self.modulus, ROUND_CONSTANTS[rc_counter.*]);
 
                 words[i] = self.modulus.add(words[i], rc);
@@ -47,6 +48,7 @@ pub fn Poseidon(comptime T: type, comptime M: type) type {
 
         fn mixLayer(self: Self, words: []Fe) !void {
             var new_words = [_]Fe{try Fe.fromPrimitive(T, self.modulus, 0)} ** 5;
+            // TODO: find a nicer way to deal with MDS_MATRIX
             var matrix = MDS_MATRIX;
 
             for (0..self.config.t) |i| {
@@ -104,24 +106,23 @@ test "basic poseidon - test vector(poseidonperm_x5_255_5)" {
     const prime = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001;
 
     const M = Modulus(256);
-    const Fe = M.Fe;
     const m = try M.fromPrimitive(u256, prime);
 
-    const expected = [5]Fe{
-        try Fe.fromPrimitive(u256, m, 0x2a918b9c9f9bd7bb509331c81e297b5707f6fc7393dcee1b13901a0b22202e18),
-        try Fe.fromPrimitive(u256, m, 0x65ebf8671739eeb11fb217f2d5c5bf4a0c3f210e3f3cd3b08b5db75675d797f7),
-        try Fe.fromPrimitive(u256, m, 0x2cc176fc26bc70737a696a9dfd1b636ce360ee76926d182390cdb7459cf585ce),
-        try Fe.fromPrimitive(u256, m, 0x4dc4e29d283afd2a491fe6aef122b9a968e74eff05341f3cc23fda1781dcb566),
-        try Fe.fromPrimitive(u256, m, 0x03ff622da276830b9451b88b85e6184fd6ae15c8ab3ee25a5667be8592cce3b1),
+    const expected = [5]M.Fe{
+        try M.Fe.fromPrimitive(u256, m, 0x2a918b9c9f9bd7bb509331c81e297b5707f6fc7393dcee1b13901a0b22202e18),
+        try M.Fe.fromPrimitive(u256, m, 0x65ebf8671739eeb11fb217f2d5c5bf4a0c3f210e3f3cd3b08b5db75675d797f7),
+        try M.Fe.fromPrimitive(u256, m, 0x2cc176fc26bc70737a696a9dfd1b636ce360ee76926d182390cdb7459cf585ce),
+        try M.Fe.fromPrimitive(u256, m, 0x4dc4e29d283afd2a491fe6aef122b9a968e74eff05341f3cc23fda1781dcb566),
+        try M.Fe.fromPrimitive(u256, m, 0x03ff622da276830b9451b88b85e6184fd6ae15c8ab3ee25a5667be8592cce3b1),
     };
 
-    var input_words = [_]Fe{try Fe.fromPrimitive(u256, m, 0)} ** 5;
+    var input_words = [_]M.Fe{try M.Fe.fromPrimitive(u256, m, 0)} ** 5;
     for (0..5) |i| {
-        input_words[i] = try Fe.fromPrimitive(u256, m, i);
+        input_words[i] = try M.Fe.fromPrimitive(u256, m, i);
     }
 
     var poseidon = Poseidon(u256, M).init(m, .{});
     var output = try poseidon.permute(&input_words);
 
-    try std.testing.expectEqualSlices(Fe, output, &expected);
+    try std.testing.expectEqualSlices(M.Fe, output, &expected);
 }
