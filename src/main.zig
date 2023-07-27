@@ -15,7 +15,7 @@ pub const PoseidonConfig = struct {
 };
 
 /// Poseidon hash function, as seen in https://eprint.iacr.org/2019/458.pdf
-pub fn Poseidon(comptime T: type, comptime M: type, comptime prime: T) type {
+pub fn Poseidon(comptime T: type, comptime M: type) type {
     return struct {
         const Self = @This();
 
@@ -24,10 +24,10 @@ pub fn Poseidon(comptime T: type, comptime M: type, comptime prime: T) type {
 
         const Fe = M.Fe;
 
-        pub fn init(config: PoseidonConfig) !Self {
+        pub fn init(modulus: M, config: PoseidonConfig) Self {
             return Self{
                 .config = config,
-                .modulus = try M.fromPrimitive(T, prime),
+                .modulus = modulus,
             };
         }
 
@@ -64,41 +64,43 @@ pub fn Poseidon(comptime T: type, comptime M: type, comptime prime: T) type {
             std.mem.copyForwards(Fe, words, &new_words);
         }
 
-        /// Carries out the actual Poseidon permutation.
-        pub fn permute(self: Self, input_words: []Fe) ![]Fe {
+        /// Carries out the Poseidon permutation.
+        pub fn permute(self: Self, words: []Fe) ![]Fe {
             var R_f = self.config.num_full_rounds / 2;
             var round_constants_counter: usize = 0;
-            var state_words = input_words;
 
+            // First full rounds
             for (0..R_f) |_| {
-                try self.addRoundConstants(state_words, &round_constants_counter);
+                try self.addRoundConstants(words, &round_constants_counter);
                 for (0..self.config.t) |i| {
-                    try self.sbox(state_words, i);
+                    try self.sbox(words, i);
                 }
-                try self.mixLayer(state_words);
+                try self.mixLayer(words);
             }
 
+            // Partial rounds
             for (0..self.config.num_partial_rounds) |_| {
-                try self.addRoundConstants(state_words, &round_constants_counter);
-                try self.sbox(state_words, 0);
-                try self.mixLayer(state_words);
+                try self.addRoundConstants(words, &round_constants_counter);
+                try self.sbox(words, 0);
+                try self.mixLayer(words);
             }
 
+            // Finish up full rounds
             for (0..R_f) |_| {
-                try self.addRoundConstants(state_words, &round_constants_counter);
+                try self.addRoundConstants(words, &round_constants_counter);
                 for (0..self.config.t) |i| {
-                    try self.sbox(state_words, i);
+                    try self.sbox(words, i);
                 }
-                try self.mixLayer(state_words);
+                try self.mixLayer(words);
             }
 
-            return state_words;
+            return words;
         }
     };
 }
 
+// Values from https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
 test "basic poseidon - test vector(poseidonperm_x5_255_5)" {
-    // Values from https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
     const prime = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001;
 
     const M = Modulus(256);
@@ -118,7 +120,7 @@ test "basic poseidon - test vector(poseidonperm_x5_255_5)" {
         input_words[i] = try Fe.fromPrimitive(u256, m, i);
     }
 
-    var poseidon = try Poseidon(u256, M, prime).init(.{});
+    var poseidon = Poseidon(u256, M).init(m, .{});
     var output = try poseidon.permute(&input_words);
 
     try std.testing.expectEqualSlices(Fe, output, &expected);
