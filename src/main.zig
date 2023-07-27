@@ -15,55 +15,57 @@ pub const PoseidonConfig = struct {
 };
 
 /// Poseidon hash function, as seen in https://eprint.iacr.org/2019/458.pdf
-pub fn Poseidon(comptime M: type, comptime prime: u256) type {
+pub fn Poseidon(comptime T: type, comptime M: type, comptime prime: T) type {
     return struct {
         const Self = @This();
 
         config: PoseidonConfig,
         modulus: M,
 
+        const Fe = M.Fe;
+
         pub fn init(config: PoseidonConfig) !Self {
             return Self{
                 .config = config,
-                .modulus = try M.fromPrimitive(u256, prime),
+                .modulus = try M.fromPrimitive(T, prime),
             };
         }
 
-        fn addRoundConstants(self: Self, words: []M.Fe, rc_counter: *usize) !void {
+        fn addRoundConstants(self: Self, words: []Fe, rc_counter: *usize) !void {
             for (0..self.config.t) |i| {
-                var rc = try M.Fe.fromPrimitive(u256, self.modulus, ROUND_CONSTANTS[rc_counter.*]);
+                var rc = try Fe.fromPrimitive(T, self.modulus, ROUND_CONSTANTS[rc_counter.*]);
 
                 words[i] = self.modulus.add(words[i], rc);
                 rc_counter.* += 1;
             }
         }
 
-        fn sbox(self: Self, words: []M.Fe, i: usize) !void {
-            var t_f = try M.Fe.fromPrimitive(u256, self.modulus, self.config.t);
+        fn sbox(self: Self, words: []Fe, i: usize) !void {
+            var t_f = try Fe.fromPrimitive(T, self.modulus, self.config.t);
             words[i] = try self.modulus.pow(words[i], t_f);
         }
 
-        fn mixLayer(self: Self, words: []M.Fe) !void {
-            var new_words = [_]M.Fe{try M.Fe.fromPrimitive(u256, self.modulus, 0)} ** 5;
+        fn mixLayer(self: Self, words: []Fe) !void {
+            var new_words = [_]Fe{try Fe.fromPrimitive(T, self.modulus, 0)} ** 5;
             var matrix = MDS_MATRIX;
 
             for (0..self.config.t) |i| {
                 for (0..self.config.t) |j| {
                     var mij_mul_word_j = self.modulus.mul(
-                        try M.Fe.fromPrimitive(u256, self.modulus, matrix[i][j]),
+                        try Fe.fromPrimitive(T, self.modulus, matrix[i][j]),
                         words[j],
                     );
-                    matrix[i][j] = try mij_mul_word_j.toPrimitive(u256);
+                    matrix[i][j] = try mij_mul_word_j.toPrimitive(T);
 
                     new_words[i] = self.modulus.add(new_words[i], mij_mul_word_j);
                 }
             }
 
-            std.mem.copyForwards(M.Fe, words, &new_words);
+            std.mem.copyForwards(Fe, words, &new_words);
         }
 
         /// Carries out the actual Poseidon permutation.
-        pub fn permute(self: Self, input_words: []M.Fe) ![]M.Fe {
+        pub fn permute(self: Self, input_words: []Fe) ![]Fe {
             var R_f = self.config.num_full_rounds / 2;
             var round_constants_counter: usize = 0;
             var state_words = input_words;
@@ -103,7 +105,7 @@ test "basic poseidon - test vector(poseidonperm_x5_255_5)" {
     const Fe = M.Fe;
     const m = try M.fromPrimitive(u256, prime);
 
-    const expected = [5]M.Fe{
+    const expected = [5]Fe{
         try Fe.fromPrimitive(u256, m, 0x2a918b9c9f9bd7bb509331c81e297b5707f6fc7393dcee1b13901a0b22202e18),
         try Fe.fromPrimitive(u256, m, 0x65ebf8671739eeb11fb217f2d5c5bf4a0c3f210e3f3cd3b08b5db75675d797f7),
         try Fe.fromPrimitive(u256, m, 0x2cc176fc26bc70737a696a9dfd1b636ce360ee76926d182390cdb7459cf585ce),
@@ -111,13 +113,13 @@ test "basic poseidon - test vector(poseidonperm_x5_255_5)" {
         try Fe.fromPrimitive(u256, m, 0x03ff622da276830b9451b88b85e6184fd6ae15c8ab3ee25a5667be8592cce3b1),
     };
 
-    var input_words = [_]M.Fe{try M.Fe.fromPrimitive(u256, m, 0)} ** 5;
+    var input_words = [_]Fe{try Fe.fromPrimitive(u256, m, 0)} ** 5;
     for (0..5) |i| {
-        input_words[i] = try M.Fe.fromPrimitive(u256, m, i);
+        input_words[i] = try Fe.fromPrimitive(u256, m, i);
     }
 
-    var poseidon = try Poseidon(M, prime).init(.{});
+    var poseidon = try Poseidon(u256, M, prime).init(.{});
     var output = try poseidon.permute(&input_words);
 
-    try std.testing.expectEqualSlices(M.Fe, output, &expected);
+    try std.testing.expectEqualSlices(Fe, output, &expected);
 }
